@@ -1,84 +1,102 @@
 import 'dart:async';
 
-import 'package:reflectable/reflectable.dart';
+import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
-
-class Reflector extends Reflectable {
-  const Reflector()
-      : super(invokingCapability); // Request the capability to invoke methods.
-}
-
-const reflector = const Reflector();
 
 abstract class Provider {
   Database db;
-  Future open(String path);
+
+  Future open();
 }
 
-@reflector
 abstract class Model {
   int id;
 
   Map<String, dynamic> toMap();
-  static Model fromMap(Map<String, dynamic> map) { return null; }
+
+  Model fromMap(Map<String, dynamic> map);
 
   static const TABLE_NAME = '';
+
   String getTableName();
 
-  Future<List<Model>> filter(int id, List<String> columns, Map<String, dynamic> where,  Provider p, Type t) async {
-    assert(t is Model);
-    List<Map> maps = await p.db.query(getTableName(), columns: columns, where: where.keys.map((f) => '$f = ?').toList().join(' AND '), whereArgs: where.values);
+  List<String> getColumns();
+
+  Future<List<Model>> filter(
+      {List<String> columns,
+      Map<String, dynamic> where,
+      Provider provider}) async {
+    List<Map> maps = await provider.db.query(getTableName(),
+        columns: getColumns(),
+        where: where != null
+            ? where.keys.map((f) => '$f = ?').toList().join(' AND ')
+            : null,
+        whereArgs: where != null ? where.values.toList() : null);
     if (maps.length > 0) {
       return maps.map((m) => fromMap(m)).toList();
     }
     return <Model>[];
   }
 
-  Future<Model> select(int id, List<String> columns, Map<String, dynamic> where,  Provider p) async {
-    List<Map> maps = await p.db.query(getTableName(), columns: columns, where: where.keys.map((f) => '$f = ?').toList().join(' AND '), whereArgs: where.values);
+  Future<Model> select(
+      {List<String> columns,
+      Map<String, dynamic> where,
+      Provider provider}) async {
+    List<Map> maps = await provider.db.query(getTableName(),
+        columns: getColumns(),
+        where: where.keys.map((f) => '$f = ?').toList().join(' AND '),
+        whereArgs: where.values.toList());
+    print(maps);
     if (maps.length > 0) {
       return fromMap(maps.first);
     }
     return null;
   }
 
-  Future<Model> insert(Model model, Provider p) async {
-    model.id = await p.db.insert(getTableName(), model.toMap());
+  Future<Model> insert({Model model, Provider provider}) async {
+    model.id = await provider.db.insert(getTableName(), model.toMap());
     return model;
   }
 
-  // TODO: Implement delete
-  // Future<int> delete(Provider p, {Model model, int id}) async {
-  //   if (id != null) {
-  //     return await p.db.delete(getTableName(), where: )
-  //   } else if (model != null) {
+// TODO: Implement delete
+// Future<int> delete(Provider p, {Model model, int id}) async {
+//   if (id != null) {
+//     return await p.db.delete(getTableName(), where: )
+//   } else if (model != null) {
 
-  //   } else {
-  //     throw ArgumentError;
-  //   }
-  // }
+//   } else {
+//     throw ArgumentError;
+//   }
+// }
 
 }
 
-
 class ExpensesProvider extends Provider {
-  Database db; 
-  Future open(String path) async {
-    db = await openDatabase(path, version: 1,
-    onCreate: (Database db, int version) async {
+  String _databaseName = 'sesat.db';
+  int _databaseVersion = 2;
+  Database db;
+
+  Future<bool> open() async {
+    // if (! await checkWithRequestPermission(PermissionGroup.storage)) {
+    //   return false;
+    // }
+    String path = join(await getDatabasesPath(), _databaseName);
+    print(path);
+    db = await openDatabase(path, version: _databaseVersion,
+        onCreate: (Database db, int version) async {
+      print('Creating database...');
       await db.execute('''
-        CREATE TABLE ${Category.TABLE_NAME} (
+        CREATE TABLE IF NOT EXISTS ${Category.TABLE_NAME} (
           ${Category.ID_COLUMN} INTEGER PRIMARY KEY AUTOINCREMENT,
           ${Category.NAME_COLUMN} STRING UNIQUE,
-          ${Category.DESCRIPTION_COLUMN} STRING,
+          ${Category.DESCRIPTION_COLUMN} STRING
         )
       ''');
-      await db.insert(Category.TABLE_NAME, misc.toMap());
       await db.execute('''
-        CREATE TABLE ${Expense.TABLE_NAME} (
+        CREATE TABLE IF NOT EXISTS ${Expense.TABLE_NAME} (
           ${Expense.ID_COLUMN} INTEGER PRIMARY KEY AUTOINCREMENT,
           ${Expense.PRICE_COLUMN} INTEGER NOT NULL,
-          ${Expense.PRODUCT_SERIVCE_COLUMN} STRING,
+          ${Expense.PRODUCT_SERVICE_COLUMN} STRING,
           ${Expense.PURCHASE_DATE_COLUMN} STRING,
           ${Expense.CATEGORY_COLUMN} INTEGER DEFAULT 1,
           CONSTRAINT fk_category
@@ -87,10 +105,10 @@ class ExpensesProvider extends Provider {
         )
       ''');
       await db.execute('''
-        CREATE TABLE ${Expense.TABLE_NAME} (
+        CREATE TABLE IF NOT EXISTS ${Expense.TABLE_NAME} (
           ${Expense.ID_COLUMN} INTEGER PRIMARY KEY AUTOINCREMENT,
           ${Expense.PRICE_COLUMN} INTEGER NOT NULL,
-          ${Expense.PRODUCT_SERIVCE_COLUMN} STRING,
+          ${Expense.PRODUCT_SERVICE_COLUMN} STRING,
           ${Expense.CATEGORY_COLUMN} INTEGER DEFAULT 1,
           CONSTRAINT fk_category
           FOREIGN KEY (${Expense.CATEGORY_COLUMN})
@@ -98,13 +116,21 @@ class ExpensesProvider extends Provider {
         )
       ''');
     });
+    var result = await Category().select(
+      where: {Category.NAME_COLUMN: misc.name},
+      provider: this,
+    );
+    print('result: $result');
+    if (result == null) {
+      Category().insert(model: misc, provider: this);
+    }
+    return true;
   }
 
   Future<Model> insert(Model model) async {
     model.id = await db.insert(model.getTableName(), model.toMap());
     return model;
   }
-
 }
 
 class Expense extends Model {
@@ -117,27 +143,35 @@ class Expense extends Model {
   static const String ID_COLUMN = 'id';
   static const String PRICE_COLUMN = 'price';
   static const String PURCHASE_DATE_COLUMN = 'purchase_date';
-  static const String PRODUCT_SERIVCE_COLUMN = 'product_service';
+  static const String PRODUCT_SERVICE_COLUMN = 'product_service';
   static const String CATEGORY_COLUMN = 'category_id';
 
   String getTableName() => TABLE_NAME;
 
-  static Expense fromMap(Map<String, dynamic> map) {
+  List<String> getColumns() => [
+        ID_COLUMN,
+        PRICE_COLUMN,
+        PURCHASE_DATE_COLUMN,
+        PRODUCT_SERVICE_COLUMN,
+        CATEGORY_COLUMN
+      ];
+
+  Expense fromMap(Map<String, dynamic> map) {
     Expense expense = Expense();
     expense.id = map[ID_COLUMN];
     expense.price = map[PRICE_COLUMN];
-    expense.purchaseDate = map[PURCHASE_DATE_COLUMN];
-    expense.productService = map[PRODUCT_SERIVCE_COLUMN];
+    expense.purchaseDate = DateTime.parse(map[PURCHASE_DATE_COLUMN]);
+    expense.productService = map[PRODUCT_SERVICE_COLUMN];
     expense.categoryId = map[CATEGORY_COLUMN];
     return expense;
   }
 
   @override
   Map<String, dynamic> toMap() {
-    var map = <String, dynamic> {
+    var map = <String, dynamic>{
       PRICE_COLUMN: price,
       PURCHASE_DATE_COLUMN: purchaseDate,
-      PRODUCT_SERIVCE_COLUMN: productService,
+      PRODUCT_SERVICE_COLUMN: productService,
       CATEGORY_COLUMN: categoryId
     };
     if (id != null) {
@@ -146,9 +180,8 @@ class Expense extends Model {
     return map;
   }
 
-
+  String formatPrice() => '₱' + (price / 100).toString();
 }
-
 
 class Category extends Model {
   String name;
@@ -161,7 +194,9 @@ class Category extends Model {
 
   String getTableName() => TABLE_NAME;
 
-  static Category fromMap(Map<String, dynamic> map) {
+  List<String> getColumns() => [ID_COLUMN, NAME_COLUMN, DESCRIPTION_COLUMN];
+
+  Category fromMap(Map<String, dynamic> map) {
     Category category = Category();
     category.id = map[ID_COLUMN];
     category.name = map[NAME_COLUMN];
@@ -170,7 +205,7 @@ class Category extends Model {
   }
 
   Map<String, dynamic> toMap() {
-    var map = <String, dynamic> {
+    var map = <String, dynamic>{
       NAME_COLUMN: name,
       DESCRIPTION_COLUMN: description,
     };
@@ -179,10 +214,9 @@ class Category extends Model {
     }
     return map;
   }
-
 }
 
-final Category misc = Category.fromMap({
+final Category misc = Category().fromMap({
   Category.NAME_COLUMN: 'Miscellaneous',
   Category.DESCRIPTION_COLUMN: 'Uncategorized'
 });
@@ -200,7 +234,10 @@ class Wish extends Model {
 
   String getTableName() => TABLE_NAME;
 
-  static Wish fromMap(Map<String, dynamic> map) {
+  List<String> getColumns() =>
+      [ID_COLUMN, PRICE_COLUMN, PRODUCT_SERIVCE_COLUMN, CATEGORY_COLUMN];
+
+  Wish fromMap(Map<String, dynamic> map) {
     Wish wish = Wish();
     wish.id = map[ID_COLUMN];
     wish.price = map[PRICE_COLUMN];
@@ -211,7 +248,7 @@ class Wish extends Model {
 
   @override
   Map<String, dynamic> toMap() {
-    var map = <String, dynamic> {
+    var map = <String, dynamic>{
       PRICE_COLUMN: price,
       PRODUCT_SERIVCE_COLUMN: productService,
       CATEGORY_COLUMN: categoryId
@@ -221,5 +258,4 @@ class Wish extends Model {
     }
     return map;
   }
-
 }

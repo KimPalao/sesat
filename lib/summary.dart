@@ -1,9 +1,12 @@
 import 'dart:collection';
+import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:fluttery_seekbar/fluttery_seekbar.dart';
-import 'dart:math';
+import 'package:sesat/globals.dart';
+import 'package:sesat/provider.dart';
 
 class Summary extends StatefulWidget {
   @override
@@ -15,11 +18,43 @@ class _SummaryState extends State<Summary> {
   Color _trackColor;
   Color _seekColor;
 
+  var _productServiceTextEditingController = TextEditingController();
+  var _priceTextEditingController = TextEditingController();
+
   @override
   initState() {
     super.initState();
     _trackColor = generateRandomColor();
     _seekColor = generateRandomColor();
+    initializeProvider();
+  }
+
+  Future<void> initializeProvider() async {
+    if (!await provider.open()) {
+      int result = await showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              actions: <Widget>[
+                FlatButton(
+                  child: Text('Grant'),
+                  onPressed: () {
+                    Navigator.of(context).pop(0);
+                    // initializeProvider();
+                  },
+                ),
+                FlatButton(
+                  child: Text('Exit App'),
+                  onPressed: () {
+                    exit(0); // Close the app
+                  },
+                )
+              ],
+            );
+          });
+    }
+    print((await Category().select(
+        where: {Category.NAME_COLUMN: 'Miscellaneous'}, provider: provider)));
   }
 
   Color generateRandomColor() {
@@ -27,11 +62,28 @@ class _SummaryState extends State<Summary> {
         255, rng.nextInt(255), rng.nextInt(255), rng.nextInt(255));
   }
 
-
   @override
   Widget build(BuildContext context) {
-
-    Queue<String> _latestTransactions;
+    Queue<Expense> _latestTransactions = Queue.of([
+      Expense().fromMap({
+        Expense.PRICE_COLUMN: 14561,
+        Expense.CATEGORY_COLUMN: 1,
+        Expense.PURCHASE_DATE_COLUMN: '2019-04-20',
+        Expense.PRODUCT_SERVICE_COLUMN: 'Food'
+      }),
+      Expense().fromMap({
+        Expense.PRICE_COLUMN: 25624,
+        Expense.CATEGORY_COLUMN: 1,
+        Expense.PURCHASE_DATE_COLUMN: '2019-04-20',
+        Expense.PRODUCT_SERVICE_COLUMN: 'Grocery'
+      }),
+      Expense().fromMap({
+        Expense.PRICE_COLUMN: 56234,
+        Expense.CATEGORY_COLUMN: 1,
+        Expense.PURCHASE_DATE_COLUMN: '2019-04-20',
+        Expense.PRODUCT_SERVICE_COLUMN: 'Transportation'
+      })
+    ]);
 
     return WillPopScope(
       onWillPop: () async => false,
@@ -82,13 +134,104 @@ class _SummaryState extends State<Summary> {
                 ),
               ),
             ),
-            Text('Latest Transactions'),
-            ListView(
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: <Widget>[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Text(
+                    'Latest Transactions',
+                    style: Theme.of(context).textTheme.title,
+                  ),
+                ),
+                FlatButton(
+                  child: Icon(Icons.add),
+                  onPressed: () {},
+                )
+              ],
+            ),
+            Row(
+              children: <Widget>[
+                Transform.rotate(
+                  angle: pi / 4,
+                  child: IconButton(
+                    icon: Icon(Icons.add),
+                    onPressed: () {},
+                  ),
+                ),
+                GridView.count(
+                  crossAxisCount: 2,
+                  children: <Widget>[
+                    TextField(
+                      keyboardType: TextInputType.number,
+                    ),
+                    TextField(
+                      controller: _productServiceTextEditingController,
+                    ),
+                    TextField(),
+                    TextField(),
+                  ],
+                ),
+                IconButton(
+                  icon: Icon(Icons.add),
+                  onPressed: () {},
+                ),
+              ],
+            ),
+            ListView.builder(
               shrinkWrap: true,
-              children: <Widget>[],
+              itemBuilder: (context, index) =>
+                  ExpenseItem(expense: _latestTransactions.toList()[index]),
+              itemCount: _latestTransactions.length,
+//              children: <Widget>[
+//                ExpenseItem(
+//                    expense: Expense().fromMap({
+//                  Expense.PRICE_COLUMN: 14561,
+//                  Expense.CATEGORY_COLUMN: 1,
+//                  Expense.PURCHASE_DATE_COLUMN: '2019-04-20',
+//                  Expense.PRODUCT_SERVICE_COLUMN: 'Food'
+//                })),
+//                ExpenseItem(
+//                    expense: Expense().fromMap({
+//                  Expense.PRICE_COLUMN: 25624,
+//                  Expense.CATEGORY_COLUMN: 1,
+//                  Expense.PURCHASE_DATE_COLUMN: '2019-04-20',
+//                  Expense.PRODUCT_SERVICE_COLUMN: 'Grocery'
+//                })),
+//                ExpenseItem(
+//                    expense: Expense().fromMap({
+//                  Expense.PRICE_COLUMN: 56234,
+//                  Expense.CATEGORY_COLUMN: 1,
+//                  Expense.PURCHASE_DATE_COLUMN: '2019-04-20',
+//                  Expense.PRODUCT_SERVICE_COLUMN: 'Transportation'
+//                })),
+//              ],
             )
           ],
         ),
+      ),
+    );
+  }
+}
+
+class ExpenseItem extends StatelessWidget {
+  ExpenseItem({@required this.expense});
+
+  final Expense expense;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: <Widget>[
+          Text(expense.productService),
+          Text(
+            expense.formatPrice(),
+            style: TextStyle(fontFamily: 'Consolas'),
+          )
+        ],
       ),
     );
   }
