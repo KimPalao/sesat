@@ -58,6 +58,13 @@ abstract class Model {
     return model;
   }
 
+  Future<int> sum({String columnName, Provider provider}) async {
+    var result = await provider.db
+        .rawQuery('SELECT SUM($columnName) FROM ${getTableName()};');
+    print('Result of sum is: $result');
+    return 0;
+  }
+
 // TODO: Implement delete
 // Future<int> delete(Provider p, {Model model, int id}) async {
 //   if (id != null) {
@@ -181,6 +188,8 @@ class Expense extends Model {
   }
 
   String formatPrice() => '₱' + (price / 100).toString();
+
+  int getSum() {}
 }
 
 class Category extends Model {
@@ -195,6 +204,12 @@ class Category extends Model {
   String getTableName() => TABLE_NAME;
 
   List<String> getColumns() => [ID_COLUMN, NAME_COLUMN, DESCRIPTION_COLUMN];
+
+  bool operator ==(other) {
+    if (other.runtimeType != Category) return false;
+    other = other as Category;
+    return this.name == other.name && this.description == other.description;
+  }
 
   Category fromMap(Map<String, dynamic> map) {
     Category category = Category();

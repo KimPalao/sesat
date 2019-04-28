@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:fluttery_seekbar/fluttery_seekbar.dart';
+import 'package:sesat/expense_field.dart';
 import 'package:sesat/globals.dart';
 import 'package:sesat/provider.dart';
 
@@ -18,8 +19,7 @@ class _SummaryState extends State<Summary> {
   Color _trackColor;
   Color _seekColor;
 
-  var _productServiceTextEditingController = TextEditingController();
-  var _priceTextEditingController = TextEditingController();
+  Category _defaultCategory;
 
   @override
   initState() {
@@ -53,8 +53,14 @@ class _SummaryState extends State<Summary> {
             );
           });
     }
-    print((await Category().select(
-        where: {Category.NAME_COLUMN: 'Miscellaneous'}, provider: provider)));
+    categories = Set.of((await Category().filter(provider: provider))
+        .map((m) => m as Category)
+        .toList());
+    setState(() {
+      _defaultCategory = categories.first;
+    });
+    print(_defaultCategory);
+    Expense().sum(columnName: Expense.PRICE_COLUMN, provider: provider);
   }
 
   Color generateRandomColor() {
@@ -84,6 +90,7 @@ class _SummaryState extends State<Summary> {
         Expense.PRODUCT_SERVICE_COLUMN: 'Transportation'
       })
     ]);
+//    final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
     return WillPopScope(
       onWillPop: () async => false,
@@ -113,101 +120,39 @@ class _SummaryState extends State<Summary> {
           ),
           elevation: 0.0,
         ),
-        body: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            Center(
-              child: SizedBox(
-                height: 150,
-                child: Stack(
-                  children: <Widget>[
-                    RadialSeekBar(
-                      trackWidth: 1.0,
-                    ),
-                    Center(
-                      child: Text(
-                        '₱41,000',
-                        style: TextStyle(fontSize: 24.0),
+        body: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Center(
+                child: SizedBox(
+                  height: 150,
+                  child: Stack(
+                    children: <Widget>[
+                      RadialSeekBar(
+                        trackWidth: 1.0,
                       ),
-                    ),
-                  ],
+                      Center(
+                        child: Text(
+                          '₱41,000',
+                          style: TextStyle(fontSize: 24.0),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: <Widget>[
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: Text(
-                    'Latest Transactions',
-                    style: Theme.of(context).textTheme.title,
-                  ),
-                ),
-                FlatButton(
-                  child: Icon(Icons.add),
-                  onPressed: () {},
-                )
-              ],
-            ),
-            Row(
-              children: <Widget>[
-                Transform.rotate(
-                  angle: pi / 4,
-                  child: IconButton(
-                    icon: Icon(Icons.add),
-                    onPressed: () {},
-                  ),
-                ),
-                GridView.count(
-                  crossAxisCount: 2,
-                  children: <Widget>[
-                    TextField(
-                      keyboardType: TextInputType.number,
-                    ),
-                    TextField(
-                      controller: _productServiceTextEditingController,
-                    ),
-                    TextField(),
-                    TextField(),
-                  ],
-                ),
-                IconButton(
-                  icon: Icon(Icons.add),
-                  onPressed: () {},
-                ),
-              ],
-            ),
-            ListView.builder(
-              shrinkWrap: true,
-              itemBuilder: (context, index) =>
-                  ExpenseItem(expense: _latestTransactions.toList()[index]),
-              itemCount: _latestTransactions.length,
-//              children: <Widget>[
-//                ExpenseItem(
-//                    expense: Expense().fromMap({
-//                  Expense.PRICE_COLUMN: 14561,
-//                  Expense.CATEGORY_COLUMN: 1,
-//                  Expense.PURCHASE_DATE_COLUMN: '2019-04-20',
-//                  Expense.PRODUCT_SERVICE_COLUMN: 'Food'
-//                })),
-//                ExpenseItem(
-//                    expense: Expense().fromMap({
-//                  Expense.PRICE_COLUMN: 25624,
-//                  Expense.CATEGORY_COLUMN: 1,
-//                  Expense.PURCHASE_DATE_COLUMN: '2019-04-20',
-//                  Expense.PRODUCT_SERVICE_COLUMN: 'Grocery'
-//                })),
-//                ExpenseItem(
-//                    expense: Expense().fromMap({
-//                  Expense.PRICE_COLUMN: 56234,
-//                  Expense.CATEGORY_COLUMN: 1,
-//                  Expense.PURCHASE_DATE_COLUMN: '2019-04-20',
-//                  Expense.PRODUCT_SERVICE_COLUMN: 'Transportation'
-//                })),
-//              ],
-            )
-          ],
+              Padding(
+                  padding: const EdgeInsets.only(top: 16.0),
+                  child: ExpenseField(categories: categories)),
+              ListView.builder(
+                shrinkWrap: true,
+                itemBuilder: (context, index) =>
+                    ExpenseItem(expense: _latestTransactions.toList()[index]),
+                itemCount: _latestTransactions.length,
+              )
+            ],
+          ),
         ),
       ),
     );
